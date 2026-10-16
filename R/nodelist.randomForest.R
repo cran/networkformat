@@ -1,0 +1,109 @@
+#' Extract Node List from RandomForest Model
+#'
+#' Extracts node-level attributes from every tree in a
+#' \code{randomForest} model.
+#' Node IDs match the \code{from}/\code{to} indices produced by
+#' \code{\link{edgelist.randomForest}}, so the two outputs can be
+#' passed directly to \code{igraph::graph_from_data_frame()} (after
+#' filtering to a single \code{treenum}).
+#'
+#' @param input_object A randomForest model object from the
+#'   \pkg{randomForest} package
+#' @param treenum Integer vector of tree numbers to extract (default:
+#'   \code{NULL} extracts all trees). Values must be between 1 and
+#'   \code{input_object$ntree}.
+#' @param ... Additional arguments (currently unused)
+#'
+#' @returns A data.frame with one row per node (across all trees) and the
+#'   following columns:
+#'   \describe{
+#'     \item{name}{Integer node ID within the tree (matches edgelist
+#'       from/to)}
+#'     \item{is_leaf}{Logical: \code{TRUE} for terminal nodes}
+#'     \item{split_var}{Numeric index of the split variable (\code{NA} for
+#'       leaves)}
+#'     \item{split_var_name}{Name of the split variable (\code{NA} for
+#'       leaves)}
+#'     \item{split_point}{Split threshold (\code{NA} for leaves)}
+#'     \item{prediction}{Predicted value (numeric for regression, integer
+#'       class index for classification)}
+#'     \item{treenum}{Integer identifying which tree the node belongs to}
+#'     \item{label}{Display label: \code{"<var>\\n< <threshold>"} for
+#'       internal nodes, predicted class name (classification) or numeric
+#'       value (regression) for leaves}
+#'   }
+#' @export
+#'
+#' @examples
+#' if (requireNamespace("randomForest", quietly = TRUE)) {
+#'   set.seed(12)
+#'   rf <- randomForest::randomForest(Species ~ ., data = iris, ntree = 3)
+#'   nodes <- nodelist(rf)
+#'   head(nodes)
+#'
+#'   # Extract a single tree
+#'   nodes1 <- nodelist(rf, treenum = 1)
+#' }
+nodelist.randomForest <- function(input_object, treenum = NULL, ...) {
+  if (!requireNamespace("randomForest", quietly = TRUE)) {
+    stop("Package 'randomForest' is required. Install it with install.packages('randomForest').")
+  }
+
+  var_names <- names(input_object$forest$ncat)
+
+  tree_indices <- .validate_treenum(treenum, input_object$ntree)
+
+  convert_tree <- function(tn) {
+    tree_df <- as.data.frame(randomForest::getTree(input_object, tn))
+    is_leaf <- tree_df$`left daughter` == 0
+    split_var <- tree_df$`split var`
+    # Leaf nodes have split_var = 0. R's `[` drops 0-indices rather than returning
+    # NA, so var_names[split_var] would be shorter than nrow(tree_df) whenever any
+    # 0-indexed (leaf) positions appear before the end. ifelse() would then recycle
+    # the shorter "no" argument, assigning wrong variable names to internal nodes.
+    # Guard by replacing 0 with 1 before indexing (the TRUE branch of ifelse selects
+    # NA_character_ for leaves, so the indexed value is never used for those rows).
+    split_var_name <- ifelse(is_leaf, NA_character_,
+                             var_names[pmax(split_var, 1L)])
+
+    # For classification models, map integer prediction to class name
+    # Non-leaf nodes have prediction = 0; replace with NA to preserve vector
+    # length (R's `[` drops 0-indices instead of returning NA)
+    pred <- tree_df$prediction
+    pred[!is_leaf] <- NA
+    if (!is.null(input_object$classes)) {
+      leaf_label <- input_object$classes[pred]
+    } else {
+      leaf_label <- as.character(pred)
+    }
+
+    # Detect categorical splits: ncat > 1 means the variable is a factor.
+    # For categorical splits the "split point" is a category-encoding value,
+    # not a numeric threshold, so the label omits the "< threshold" form.
+    ncat <- input_object$forest$ncat
+    is_categorical <- !is_leaf & ncat[pmax(split_var, 1L)] > 1L
+
+    internal_label <- ifelse(
+      is_categorical,
+      split_var_name,
+      paste0(split_var_name, "\n< ", round(tree_df$`split point`, 2))
+    )
+
+    data.frame(
+      name           = seq_len(nrow(tree_df)),
+      is_leaf        = is_leaf,
+      split_var      = ifelse(is_leaf, NA_real_, split_var),
+      split_var_name = split_var_name,
+      split_point    = ifelse(is_leaf, NA_real_, tree_df$`split point`),
+      prediction     = ifelse(is_leaf, tree_df$prediction, NA_real_),
+      treenum        = tn,
+      label          = ifelse(is_leaf, leaf_label, internal_label),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  node_list <- lapply(tree_indices, convert_tree)
+  result <- do.call(rbind, node_list)
+  rownames(result) <- NULL
+  result
+}

@@ -1,0 +1,38 @@
+Package: networkformat
+Type: Package
+Title: Convert R Objects to Network Edgelists and Nodelists
+Version: 0.1.2
+Authors@R: person(
+      "Jesse", "Brandt",
+      email = "jesse.a.brandt@gmail.com",
+      role = c("aut", "cre"),
+      comment = c(ORCID = "0009-0005-7462-075X")
+    )
+Description: Network analysis and plotting packages such as 'igraph',
+    'tidygraph', and 'ggraph' expect the edges and nodes of a graph as flat
+    tables. Methods are provided to build those tables from data frames
+    (column-pair edges chosen with 'tidyselect' semantics), tree-based model
+    objects ('randomForest', 'tree', 'rpart', 'xgboost', 'gbm'), lists
+    (recursive parent-child edges), and atomic vectors (sequential edges).
+    Graphs can also be constructed in one step via as.igraph() and
+    as_tbl_graph() methods for tree models.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends: R (>= 3.6.0)
+Imports: rlang, tidyselect
+Suggests: randomForest, tree, xgboost, gbm, rpart, testthat (>= 3.0.0),
+        covr, igraph, tidygraph, ggraph, knitr, rmarkdown
+Config/testthat/edition: 3
+URL: https://jessebrandtdata.github.io/networkformat/,
+        https://github.com/jessebrandtdata/networkformat
+BugReports: https://github.com/jessebrandtdata/networkformat/issues
+VignetteBuilder: knitr
+Config/roxygen2/version: 8.0.0
+NeedsCompilation: no
+Packaged: 2026-10-06 20:24:37 UTC; jesse
+Author: Jesse Brandt [aut, cre] (ORCID:
+    <https://orcid.org/0009-0005-7462-075X>)
+Maintainer: Jesse Brandt <jesse.a.brandt@gmail.com>
+Repository: CRAN
+Date/Publication: 2026-10-16 12:50:07 UTC
